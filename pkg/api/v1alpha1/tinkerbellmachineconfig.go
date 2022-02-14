@@ -79,6 +79,18 @@ func GetTinkerbellDefaultTemplateOverride(name string) *TinkerbellTemplate {
 					},
 				},
 				{
+					Name:    "create-user",
+					Image:   "cexec:v1.0.0",
+					Timeout: 90,
+					Environment: map[string]string{
+						"BLOCK_DEVICE":        "/dev/sda1",
+						"FS_TYPE":             "ext4",
+						"CHROOT":              "y",
+						"DEFAULT_INTERPRETER": "/bin/sh -c",
+						"CMD_LINE":            "useradd -p $(openssl passwd -1 tink) -s /bin/bash -d /home/tink/ -m -G sudo tink",
+					},
+				},
+				{
 					Name:    "write-netplan",
 					Image:   "writefile:v1.0.0",
 					Timeout: 90,
@@ -87,17 +99,18 @@ func GetTinkerbellDefaultTemplateOverride(name string) *TinkerbellTemplate {
 						"FS_TYPE":   "ext4",
 						"DEST_PATH": "/etc/netplan/config.yaml",
 						"CONTENTS": `network:
-  version: 2
-  renderer: networkd
-  ethernets:
-    eno1:
-        dhcp4: true
-    eno2:
-        dhcp4: true
-    eno3:
-        dhcp4: true
-    eno4:
-        dhcp4: true`,
+    version: 2
+    renderer: networkd
+    ethernets:
+        eno1:
+            dhcp4: true
+        eno2:
+            dhcp4: true
+        eno3:
+            dhcp4: true
+        eno4:
+            dhcp4: true
+`,
 						"UID":     "0",
 						"GID":     "0",
 						"MODE":    "0644",
@@ -113,18 +126,19 @@ func GetTinkerbellDefaultTemplateOverride(name string) *TinkerbellTemplate {
 						"FS_TYPE":   "ext4",
 						"DEST_PATH": "/etc/cloud/cloud.cfg.d/10_tinkerbell.cfg",
 						"CONTENTS": fmt.Sprintf(`datasource:
-  Ec2:
-    metadata_urls: ["%s"]
-    strict_id: false
+    Ec2:
+        metadata_urls: ["%s"]
+        strict_id: false
 system_info:
-  default_user:
-    name: tink
-    groups: [wheel, adm]
-    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
-    shell: /bin/bash
+    default_user:
+        name: tink
+        groups: [wheel, adm]
+        sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+        shell: /bin/bash
 manage_etc_hosts: localhost
 warnings:
-  dsid_missing_source: off`, TinkerbellDefaultMachineTemplateHegelURL),
+    dsid_missing_source: off
+`, TinkerbellDefaultMachineTemplateHegelURL),
 						"UID":     "0",
 						"GID":     "0",
 						"MODE":    "0600",
@@ -139,7 +153,7 @@ warnings:
 						"DEST_DISK": "/dev/sda1",
 						"FS_TYPE":   "ext4",
 						"DEST_PATH": "/etc/cloud/ds-identify.cfg",
-						"CONTENTS":  `datasource: Ec2`,
+						"CONTENTS":  "datasource: Ec2\n",
 						"UID":       "0",
 						"GID":       "0",
 						"MODE":      "0600",

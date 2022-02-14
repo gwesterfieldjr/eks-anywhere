@@ -5,6 +5,7 @@ env:
     INTEGRATION_TEST_MAX_EC2_COUNT: 25
     T_VSPHERE_CIDR: "198.18.0.0/16"
     T_VSPHERE_PRIVATE_NETWORK_CIDR: "10.1.0.0/24"
+    SKIPPED_TESTS: "TestTinkerbellKubernetes120SimpleFlow,TestTinkerbellKubernetes121SimpleFlow"
   secrets-manager:
     EKSA_VSPHERE_USERNAME: "vsphere_ci_beta_connection:vsphere_username"
     EKSA_VSPHERE_PASSWORD: "vsphere_ci_beta_connection:vsphere_password"
@@ -48,4 +49,5 @@ phases:
         -n ${INTEGRATION_TEST_SUBNET_ID}
         -m ${INTEGRATION_TEST_MAX_EC2_COUNT}
         -r 'Test'
+        --skip ${SKIPPED_TESTS}
         --cleanup-vms=true
