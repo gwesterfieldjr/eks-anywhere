@@ -116,3 +116,21 @@ func WithUbuntu121Tinkerbell() TinkerbellOpt {
 		)
 	}
 }
+
+func WithSuperMicroHardware() TinkerbellOpt {
+	return func(t *Tinkerbell) {
+
+	}
+}
+
+func WithDellHardware() TinkerbellOpt {
+	return func(t *Tinkerbell) {
+
+	}
+}
+
+func WithHPHardware() TinkerbellOpt {
+	return func(t *Tinkerbell) {
+
+	}
+}

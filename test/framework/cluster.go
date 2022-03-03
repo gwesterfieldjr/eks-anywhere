@@ -38,29 +38,31 @@ const (
 	ClusterNameVar                   = "T_CLUSTER_NAME"
 	JobIdVar                         = "T_JOB_ID"
 	BundlesOverrideVar               = "T_BUNDLES_OVERRIDE"
-	hardwareYaml                     = "hardware-manifests/hardware.yaml"
+	hardwareYamlPath                 = "hardware-manifests/hardware.yaml"
 )
 
 //go:embed testdata/oidc-roles.yaml
 var oidcRoles []byte
 
 type ClusterE2ETest struct {
-	T                     *testing.T
-	ClusterConfigLocation string
-	ClusterName           string
-	ClusterConfig         *v1alpha1.Cluster
-	Provider              Provider
-	ClusterConfigB        []byte
-	ProviderConfigB       []byte
-	clusterFillers        []api.ClusterFiller
-	KubectlClient         *executables.Kubectl
-	GitProvider           git.Provider
-	GitWriter             filewriter.FileWriter
-	OIDCConfig            *v1alpha1.OIDCConfig
-	GitOpsConfig          *v1alpha1.GitOpsConfig
-	ProxyConfig           *v1alpha1.ProxyConfiguration
-	AWSIamConfig          *v1alpha1.AWSIamConfig
-	eksaBinaryLocation    string
+	T                      *testing.T
+	ClusterConfigLocation  string
+	ClusterConfigFolder    string
+	HardwareConfigLocation string
+	ClusterName            string
+	ClusterConfig          *v1alpha1.Cluster
+	Provider               Provider
+	ClusterConfigB         []byte
+	ProviderConfigB        []byte
+	clusterFillers         []api.ClusterFiller
+	KubectlClient          *executables.Kubectl
+	GitProvider            git.Provider
+	GitWriter              filewriter.FileWriter
+	OIDCConfig             *v1alpha1.OIDCConfig
+	GitOpsConfig           *v1alpha1.GitOpsConfig
+	ProxyConfig            *v1alpha1.ProxyConfiguration
+	AWSIamConfig           *v1alpha1.AWSIamConfig
+	eksaBinaryLocation     string
 }
 
 type ClusterE2ETestOpt func(e *ClusterE2ETest)
@@ -75,6 +77,9 @@ func NewClusterE2ETest(t *testing.T, provider Provider, opts ...ClusterE2ETestOp
 		KubectlClient:         buildKubectl(t),
 		eksaBinaryLocation:    defaultEksaBinaryLocation,
 	}
+
+	e.ClusterConfigFolder = fmt.Sprintf("%s-config", e.ClusterName)
+	e.HardwareConfigLocation = filepath.Join(e.ClusterConfigFolder, hardwareYamlPath)
 
 	for _, opt := range opts {
 		opt(e)
@@ -166,7 +171,7 @@ func (e *ClusterE2ETest) GenerateHardwareConfig(opts ...CommandOpt) {
 
 func (e *ClusterE2ETest) generateHardwareConfig(csvFilePath string, opts ...CommandOpt) {
 	generateHardwareConfigArgs := []string{"generate", "hardware", "--dry-run", "-f", csvFilePath}
-	e.RunEKSA(generateHardwareConfigArgs, opts...)
+	e.RunEKSA(generateHardwareConfigArgs, e.ClusterConfigFolder, opts...)
 }
 
 func (e *ClusterE2ETest) GenerateClusterConfigForVersion(eksaVersion string, opts ...CommandOpt) {
@@ -181,13 +186,13 @@ func (e *ClusterE2ETest) GenerateClusterConfigForVersion(eksaVersion string, opt
 
 	e.buildClusterConfigFile()
 	e.cleanup(func() {
-		os.Remove(e.ClusterConfigLocation)
+		//os.Remove(e.ClusterConfigLocation)
 	})
 }
 
 func (e *ClusterE2ETest) generateClusterConfigObjects(opts ...CommandOpt) {
 	generateClusterConfigArgs := []string{"generate", "clusterconfig", e.ClusterName, "-p", e.Provider.Name(), ">", e.ClusterConfigLocation}
-	e.RunEKSA(generateClusterConfigArgs, opts...)
+	e.RunEKSA(generateClusterConfigArgs, "", opts...)
 
 	clusterFillersFromProvider := e.Provider.ClusterConfigFillers()
 	clusterConfigFillers := make([]api.ClusterFiller, 0, len(e.clusterFillers)+len(clusterFillersFromProvider))
@@ -199,7 +204,7 @@ func (e *ClusterE2ETest) generateClusterConfigObjects(opts ...CommandOpt) {
 
 func (e *ClusterE2ETest) ImportImages(opts ...CommandOpt) {
 	importImagesArgs := []string{"import-images", "-f", e.ClusterConfigLocation}
-	e.RunEKSA(importImagesArgs, opts...)
+	e.RunEKSA(importImagesArgs, "", opts...)
 }
 
 func (e *ClusterE2ETest) CreateCluster(opts ...CommandOpt) {
@@ -214,10 +219,10 @@ func (e *ClusterE2ETest) createCluster(opts ...CommandOpt) {
 	}
 
 	if e.Provider.Name() == TinkerbellProviderName {
-		createClusterArgs = append(createClusterArgs, "-w", hardwareYaml)
+		createClusterArgs = append(createClusterArgs, "-w", e.HardwareConfigLocation)
 	}
 
-	e.RunEKSA(createClusterArgs, opts...)
+	e.RunEKSA(createClusterArgs, "", opts...)
 	e.cleanup(func() {
 		os.RemoveAll(e.ClusterName)
 	})
@@ -270,7 +275,7 @@ func (e *ClusterE2ETest) upgradeCluster(clusterOpts []ClusterE2ETestOpt, command
 		upgradeClusterArgs = append(upgradeClusterArgs, "--bundles-override", defaultBundleReleaseManifestFile)
 	}
 
-	e.RunEKSA(upgradeClusterArgs, commandOpts...)
+	e.RunEKSA(upgradeClusterArgs, "", commandOpts...)
 }
 
 func (e *ClusterE2ETest) generateClusterConfig() []byte {
@@ -304,8 +309,7 @@ func (e *ClusterE2ETest) generateClusterConfig() []byte {
 func (e *ClusterE2ETest) buildClusterConfigFile() {
 	b := e.generateClusterConfig()
 
-	clusterConfigFolder := fmt.Sprintf("%s-config", e.ClusterName)
-	writer, err := filewriter.NewWriter(clusterConfigFolder)
+	writer, err := filewriter.NewWriter(e.ClusterConfigFolder)
 	if err != nil {
 		e.T.Fatalf("Error creating writer: %v", err)
 	}
@@ -326,10 +330,10 @@ func (e *ClusterE2ETest) deleteCluster(opts ...CommandOpt) {
 	if getBundlesOverride() == "true" {
 		deleteClusterArgs = append(deleteClusterArgs, "--bundles-override", defaultBundleReleaseManifestFile)
 	}
-	e.RunEKSA(deleteClusterArgs, opts...)
+	e.RunEKSA(deleteClusterArgs, "", opts...)
 }
 
-func (e *ClusterE2ETest) Run(name string, args ...string) {
+func (e *ClusterE2ETest) Run(name string, subWorkDir string, args ...string) {
 	command := strings.Join(append([]string{name}, args...), " ")
 	shArgs := []string{"-c", command}
 
@@ -337,12 +341,19 @@ func (e *ClusterE2ETest) Run(name string, args ...string) {
 	cmd := exec.CommandContext(context.Background(), "sh", shArgs...)
 
 	envPath := os.Getenv("PATH")
+
 	workDir, err := os.Getwd()
 	if err != nil {
 		e.T.Fatalf("Error finding current directory: %v", err)
 	}
+
+	if subWorkDir != "" {
+		cmd.Dir = filepath.Join(workDir, subWorkDir)
+	}
+
 	var stdoutAndErr bytes.Buffer
 
+	e.T.Log("Working Dir:", "[", workDir, "]")
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, fmt.Sprintf("PATH=%s/bin:%s", workDir, envPath))
 	cmd.Stderr = io.MultiWriter(os.Stderr, &stdoutAndErr)
@@ -371,7 +382,7 @@ func (e *ClusterE2ETest) Run(name string, args ...string) {
 	}
 }
 
-func (e *ClusterE2ETest) RunEKSA(args []string, opts ...CommandOpt) {
+func (e *ClusterE2ETest) RunEKSA(args []string, workDir string, opts ...CommandOpt) {
 	binaryPath := e.eksaBinaryLocation
 	for _, o := range opts {
 		err := o(&binaryPath, &args)
@@ -379,7 +390,7 @@ func (e *ClusterE2ETest) RunEKSA(args []string, opts ...CommandOpt) {
 			e.T.Fatalf("Error executing EKS-A at path %s with args %s: %v", binaryPath, args, err)
 		}
 	}
-	e.Run(binaryPath, args...)
+	e.Run(binaryPath, workDir, args...)
 }
 
 func (e *ClusterE2ETest) StopIfFailed() {
