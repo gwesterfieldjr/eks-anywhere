@@ -255,6 +255,17 @@ func TestTinkerbellKubernetes122OSImageURLOverride(t *testing.T) {
 	runTinkerbellSimpleFlow(test)
 }
 
+func TestTinkerbellKubernetes122UbuntuTemplateOverride(t *testing.T) {
+	test := framework.NewClusterE2ETest(
+		t,
+		framework.NewTinkerbell(t, framework.WithUbuntu122Tinkerbell(), framework.WithTinkerbellUbuntuTemplateConfig()),
+		framework.WithClusterFiller(api.WithKubernetesVersion(v1alpha1.Kube122)),
+		framework.WithControlPlaneHardware(1),
+		framework.WithWorkerHardware(1),
+	)
+	runTinkerbellSimpleFlow(test)
+}
+
 func TestTinkerbellKubernetes123SimpleFlow(t *testing.T) {
 	test := framework.NewClusterE2ETest(
 		t,

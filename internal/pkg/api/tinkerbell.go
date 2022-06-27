@@ -7,9 +7,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 
+	"github.com/aws/eks-anywhere/pkg/api/v1alpha1"
 	anywherev1 "github.com/aws/eks-anywhere/pkg/api/v1alpha1"
+	"github.com/aws/eks-anywhere/pkg/cluster"
 	"github.com/aws/eks-anywhere/pkg/providers"
 	"github.com/aws/eks-anywhere/pkg/templater"
+	"github.com/aws/eks-anywhere/pkg/version"
 )
 
 type TinkerbellConfig struct {
@@ -200,6 +203,50 @@ func WithCustomTinkerbellMachineConfig(selector string) TinkerbellFiller {
 			}
 			config.machineConfigs[selector] = m
 		}
+		return nil
+	}
+}
+
+func WithCustomControlPlaneTemplateConfig(tinkerbellBootstrapIp, tinkerbellIp, disk string, osFamily anywherev1.OSFamily) TinkerbellFiller {
+	return func(config TinkerbellConfig) error {
+		versionBundle, err := cluster.GetVersionsBundleForVersion(version.Get(), config.clusterConfig.Spec.KubernetesVersion)
+		if err != nil {
+			return fmt.Errorf("creating control plane node template config: %v", err)
+		}
+
+		clusterName := config.clusterConfig.Name
+		cpName := providers.GetControlPlaneNodeName(clusterName)
+
+		cpMachineConfig := config.machineConfigs[cpName]
+		cpTemplateConfig := v1alpha1.NewDefaultTinkerbellTemplateConfigCreate(cpName, *versionBundle, disk, config.datacenterConfig.Spec.OSImageURL, tinkerbellBootstrapIp, tinkerbellIp, osFamily)
+		config.templateConfigs[cpTemplateConfig.Name] = cpTemplateConfig
+
+		cpMachineConfig.Spec.TemplateRef = anywherev1.Ref{
+			Name: cpName,
+			Kind: anywherev1.TinkerbellTemplateConfigKind,
+		}
+
+		return nil
+	}
+}
+
+func WithCustomWorkerTemplateConfig(tinkerbellBootstrapIp, tinkerbellIp, disk string, osFamily anywherev1.OSFamily) TinkerbellFiller {
+	return func(config TinkerbellConfig) error {
+		versionBundle, err := cluster.GetVersionsBundleForVersion(version.Get(), config.clusterConfig.Spec.KubernetesVersion)
+		if err != nil {
+			return fmt.Errorf("creating worker node template config: %v", err)
+		}
+
+		workerName := config.clusterConfig.Name
+		workerMachineConfig := config.machineConfigs[workerName]
+		workerTemplateConfig := v1alpha1.NewDefaultTinkerbellTemplateConfigCreate(workerName, *versionBundle, disk, config.datacenterConfig.Spec.OSImageURL, tinkerbellBootstrapIp, tinkerbellIp, osFamily)
+		config.templateConfigs[workerTemplateConfig.Name] = workerTemplateConfig
+
+		workerMachineConfig.Spec.TemplateRef = anywherev1.Ref{
+			Name: workerName,
+			Kind: anywherev1.TinkerbellTemplateConfigKind,
+		}
+
 		return nil
 	}
 }

@@ -6,6 +6,8 @@ import (
 
 	"github.com/aws/eks-anywhere/internal/pkg/api"
 	anywherev1 "github.com/aws/eks-anywhere/pkg/api/v1alpha1"
+	"github.com/aws/eks-anywhere/pkg/logger"
+	"github.com/aws/eks-anywhere/pkg/networkutils"
 )
 
 const (
@@ -44,6 +46,7 @@ type Tinkerbell struct {
 	fillers              []api.TinkerbellFiller
 	clusterFillers       []api.ClusterFiller
 	serverIP             string
+	bootstrapIP          string
 	cidr                 string
 	controlPlaneCidr     string
 	inventoryCsvFilePath string
@@ -58,6 +61,17 @@ func NewTinkerbell(t *testing.T, opts ...TinkerbellOpt) *Tinkerbell {
 		t.Fatalf("failed to generate tinkerbell ip from cidr %s: %v", cidr, err)
 	}
 
+	tinkerbellBootstrapIp := os.Getenv(tinkerbellBootstrapIPEnvVar)
+	if tinkerbellBootstrapIp == "" {
+		logger.V(4).Info("Inferring local Tinkerbell Bootstrap IP from environment")
+		localIp, err := networkutils.GetLocalIP()
+		if err != nil {
+			t.Fatalf("failed to infer tinkerbell bootstrap ip from envrionment %s: %v", localIp, err)
+		}
+		tinkerbellBootstrapIp = localIp.String()
+		os.Setenv(tinkerbellBootstrapIPEnvVar, tinkerbellBootstrapIp)
+	}
+
 	tink := &Tinkerbell{
 		t: t,
 		fillers: []api.TinkerbellFiller{
@@ -67,8 +81,8 @@ func NewTinkerbell(t *testing.T, opts ...TinkerbellOpt) *Tinkerbell {
 		},
 	}
 
+	tink.bootstrapIP = tinkerbellBootstrapIp
 	tink.serverIP = serverIP
-
 	tink.cidr = cidr
 	tink.controlPlaneCidr = os.Getenv(tinkerbellControlPlaneNetworkCidrEnvVar)
 	tink.inventoryCsvFilePath = os.Getenv(tinkerbellInventoryCsvFilePathEnvVar)
@@ -175,5 +189,12 @@ func WithTinkerbellExternalEtcdTopology(count int) TinkerbellOpt {
 func WithCustomTinkerbellMachineConfig(selector string) TinkerbellOpt {
 	return func(t *Tinkerbell) {
 		t.fillers = append([]api.TinkerbellFiller{api.WithCustomTinkerbellMachineConfig(selector)}, t.fillers...)
+	}
+}
+
+func WithTinkerbellUbuntuTemplateConfig() TinkerbellOpt {
+	return func(t *Tinkerbell) {
+		t.fillers = append([]api.TinkerbellFiller{api.WithCustomControlPlaneTemplateConfig(t.bootstrapIP, t.serverIP, "/dev/sda", anywherev1.Ubuntu)}, t.fillers...)
+		t.fillers = append([]api.TinkerbellFiller{api.WithCustomWorkerTemplateConfig(t.bootstrapIP, t.serverIP, "/dev/sda", anywherev1.Ubuntu)}, t.fillers...)
 	}
 }
